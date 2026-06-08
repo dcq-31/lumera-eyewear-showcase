@@ -7,6 +7,12 @@ import * as THREE from "three";
 
 const MODEL_PATH = "/models/glasses.glb";
 
+export type ModelExtents = {
+  halfWidth: number;
+  halfHeight: number;
+  halfDepth: number;
+};
+
 type GlassesModelProps = {
   scrollProgress: React.RefObject<number>;
   pointer: React.RefObject<{ x: number; y: number }>;
@@ -14,6 +20,7 @@ type GlassesModelProps = {
   lensTint: string;
   pinnedRotation?: React.RefObject<number>;
   pinnedProgress?: React.RefObject<number>;
+  onMeasure?: (extents: ModelExtents) => void;
 };
 
 export function GlassesModel({
@@ -23,6 +30,7 @@ export function GlassesModel({
   lensTint,
   pinnedRotation,
   pinnedProgress,
+  onMeasure,
 }: GlassesModelProps) {
   const groupRef = useRef<THREE.Group>(null);
   const gltf = useGLTF(MODEL_PATH);
@@ -64,7 +72,13 @@ export function GlassesModel({
     cloned.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
     cloned.scale.setScalar(scale);
 
-    return { cloned, meshes };
+    const extents: ModelExtents = {
+      halfWidth: (size.x * scale) / 2,
+      halfHeight: (size.y * scale) / 2,
+      halfDepth: (size.z * scale) / 2,
+    };
+
+    return { cloned, meshes, extents };
   }, [gltf.scene]);
 
   useEffect(() => {
@@ -72,6 +86,10 @@ export function GlassesModel({
       mesh.material = frameMat;
     });
   }, [prepared, frameMat]);
+
+  useEffect(() => {
+    onMeasure?.(prepared.extents);
+  }, [prepared, onMeasure]);
 
   useFrame((state, delta) => {
     const g = groupRef.current;

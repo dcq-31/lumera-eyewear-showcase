@@ -5,38 +5,40 @@ import { ContactShadows, AdaptiveDpr, AdaptiveEvents, PerformanceMonitor } from 
 import { Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { useTheme } from "next-themes";
 import * as THREE from "three";
-import { GlassesModel } from "./GlassesModel";
+import { GlassesModel, type ModelExtents } from "./GlassesModel";
 import { SceneLoader } from "./SceneLoader";
 import { SceneFallback } from "./SceneFallback";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
 
+const NEAR_FLOOR = 3;
+const MAX_TILT = 0.5;
+const IDLE_BOB = 0.12;
+
 /**
- * Auto-fit camera distance so the model's bounding sphere stays inside the
- * visible frustum at any canvas aspect. `minZ` is the desktop floor — the
- * camera never pulls in closer than that, but it pushes back whenever the
- * canvas is too narrow (mobile / tablet portrait) to fit the model.
+ * Fits the camera to the model's measured box, width and height independently.
+ * The horizontal swing radius (hypot of half-width/depth) keeps the model from
+ * cropping as it spins; `padding` adds a uniform safety ring.
  */
-function FitCamera({
-  minZ,
-  radius = 2.1,
-  margin = 1.2,
-}: {
-  minZ: number;
-  radius?: number;
-  margin?: number;
-}) {
+function FitCamera({ extents, padding = 1.18 }: { extents: ModelExtents | null; padding?: number }) {
   const { camera, size } = useThree();
   useEffect(() => {
-    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    if (!extents || !(camera instanceof THREE.PerspectiveCamera)) return;
     const halfFov = (camera.fov / 2) * (Math.PI / 180);
+    const tan = Math.tan(halfFov);
     const aspect = size.width / Math.max(size.height, 1);
-    const distForHeight = radius / Math.tan(halfFov);
-    const distForWidth = radius / (Math.tan(halfFov) * Math.max(aspect, 0.01));
-    const z = Math.max(distForHeight, distForWidth) * margin;
-    camera.position.z = Math.max(z, minZ);
+
+    const rHoriz = Math.hypot(extents.halfWidth, extents.halfDepth);
+    const rVert =
+      extents.halfHeight * Math.cos(MAX_TILT) + extents.halfDepth * Math.sin(MAX_TILT) + IDLE_BOB;
+
+    const distForWidth = rHoriz / (tan * Math.max(aspect, 0.01));
+    const distForHeight = rVert / tan;
+    const z = Math.max(distForWidth, distForHeight) * padding;
+
+    camera.position.z = Math.max(z, NEAR_FLOOR);
     camera.updateProjectionMatrix();
-  }, [camera, size.width, size.height, minZ, radius, margin]);
+  }, [camera, size.width, size.height, extents, padding]);
   return null;
 }
 
@@ -63,6 +65,7 @@ type SceneProps = {
   pinnedProgress?: RefObject<number>;
   className?: string;
   cameraZ?: number;
+  padding?: number;
   intensity?: number;
   active?: boolean;
 };
@@ -90,11 +93,13 @@ export function Scene({
   pinnedProgress,
   className,
   cameraZ = 5.5,
+  padding,
   intensity = 1,
   active = true,
 }: SceneProps) {
   const [hasWebGL, setHasWebGL] = useState(true);
   const [dpr, setDpr] = useState<[number, number]>([1, 1.5]);
+  const [extents, setExtents] = useState<ModelExtents | null>(null);
   const reduced = useReducedMotion();
   const mountRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
@@ -122,7 +127,7 @@ export function Scene({
         frameloop={reduced || !active ? "demand" : "always"}
         shadows
       >
-        <FitCamera minZ={cameraZ} />
+        <FitCamera extents={extents} padding={padding} />
         <PerformanceMonitor
           onIncline={() => setDpr([1, 1.6])}
           onDecline={() => setDpr([0.75, 1.1])}
@@ -158,6 +163,7 @@ export function Scene({
               lensTint={lensTint}
               pinnedRotation={pinnedRotation}
               pinnedProgress={pinnedProgress}
+              onMeasure={setExtents}
             />
           </group>
 
