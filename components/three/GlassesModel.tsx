@@ -116,7 +116,15 @@ export function GlassesModel({
     g.position.y += (idleY - g.position.y) * Math.min(1, delta * 2);
   });
 
-  return <primitive ref={groupRef} object={prepared.cloned} />;
+  // groupRef (outer) carries rotation + idle bob and sits at the origin, which
+  // coincides with the model's center; the inner primitive holds the centering
+  // offset. This makes rotation pivot about the true center so it never swings
+  // off-frame as it spins.
+  return (
+    <group ref={groupRef}>
+      <primitive object={prepared.cloned} />
+    </group>
+  );
 }
 
 useGLTF.preload(MODEL_PATH);
