@@ -12,15 +12,14 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
 
 const NEAR_FLOOR = 3;
-const MAX_TILT = 0.5;
 const IDLE_BOB = 0.12;
 
 /**
- * Fits the camera to the model's measured box, width and height independently.
- * The horizontal swing radius (hypot of half-width/depth) keeps the model from
- * cropping as it spins; `padding` adds a uniform safety ring.
+ * Fits the camera to the model's bounding sphere. The sphere radius (half the box
+ * diagonal) is invariant to rotation, so the model can never crop as it spins —
+ * at any orientation or viewport aspect. `padding` adds a uniform safety ring.
  */
-function FitCamera({ extents, padding = 1.18 }: { extents: ModelExtents | null; padding?: number }) {
+function FitCamera({ extents, padding = 1.1 }: { extents: ModelExtents | null; padding?: number }) {
   const { camera, size } = useThree();
   useEffect(() => {
     if (!extents || !(camera instanceof THREE.PerspectiveCamera)) return;
@@ -28,12 +27,11 @@ function FitCamera({ extents, padding = 1.18 }: { extents: ModelExtents | null; 
     const tan = Math.tan(halfFov);
     const aspect = size.width / Math.max(size.height, 1);
 
-    const rHoriz = Math.hypot(extents.halfWidth, extents.halfDepth);
-    const rVert =
-      extents.halfHeight * Math.cos(MAX_TILT) + extents.halfDepth * Math.sin(MAX_TILT) + IDLE_BOB;
+    // Rotation-invariant radius; IDLE_BOB covers the vertical idle bob offset.
+    const r = Math.hypot(extents.halfWidth, extents.halfHeight, extents.halfDepth) + IDLE_BOB;
 
-    const distForWidth = rHoriz / (tan * Math.max(aspect, 0.01));
-    const distForHeight = rVert / tan;
+    const distForWidth = r / (tan * Math.max(aspect, 0.01));
+    const distForHeight = r / tan;
     const z = Math.max(distForWidth, distForHeight) * padding;
 
     camera.position.z = Math.max(z, NEAR_FLOOR);
