@@ -22,7 +22,7 @@ export function ThemeToggle({ className }: Props) {
   // to avoid the wrong icon flashing in.
   useEffect(() => setMounted(true), []);
 
-  const isDark = mounted ? resolvedTheme !== "light" : true;
+  const isDark = mounted ? resolvedTheme !== "light" : false;
 
   const toggle = () => setTheme(isDark ? "light" : "dark");
 
